@@ -1,0 +1,109 @@
+name: Build IPA
+on:
+  push:
+  workflow_dispatch:
+
+jobs:
+  build:
+    runs-on: macos-15
+    steps:
+      - name: Create project files
+        run: |
+          mkdir -p Sources
+          cat > project.yml <<'EOF'
+          name: MintBox
+          options:
+            bundleIdPrefix: com.mtech
+          targets:
+            MintBox:
+              type: application
+              platform: iOS
+              deploymentTarget: "16.0"
+              sources: [Sources]
+              settings:
+                base:
+                  PRODUCT_BUNDLE_IDENTIFIER: com.mtech.mintbox
+                  GENERATE_INFOPLIST_FILE: YES
+                  INFOPLIST_KEY_CFBundleDisplayName: MintBox
+                  INFOPLIST_KEY_UILaunchScreen_Generation: YES
+                  INFOPLIST_KEY_UIUserInterfaceStyle: Dark
+                  INFOPLIST_KEY_UISupportedInterfaceOrientations: UIInterfaceOrientationPortrait
+                  TARGETED_DEVICE_FAMILY: "1"
+                  MARKETING_VERSION: "1.0"
+                  CURRENT_PROJECT_VERSION: "1"
+                  SWIFT_VERSION: "5.0"
+          EOF
+          cat > Sources/MintBoxApp.swift <<'EOF'
+          import SwiftUI
+
+          @main
+          struct MintBoxApp: App {
+              var body: some Scene {
+                  WindowGroup { ContentView() }
+              }
+          }
+          EOF
+          cat > Sources/ContentView.swift <<'EOF'
+          import SwiftUI
+
+          struct ContentView: View {
+              @Environment(\.openURL) private var openURL
+              private let mint = Color(red: 0.55, green: 1.0, blue: 0.80)
+              private let green = Color(red: 0.25, green: 0.88, blue: 0.48)
+
+              var body: some View {
+                  ZStack {
+                      Color(red: 0.02, green: 0.03, blue: 0.025).ignoresSafeArea()
+                      VStack(spacing: 24) {
+                          Spacer()
+                          Image(systemName: "shippingbox.fill")
+                              .font(.system(size: 84))
+                              .foregroundStyle(LinearGradient(colors: [mint, green], startPoint: .top, endPoint: .bottom))
+                              .shadow(color: green.opacity(0.6), radius: 24)
+                          Text("MintBox")
+                              .font(.system(size: 40, weight: .bold, design: .rounded))
+                              .foregroundColor(.white)
+                          Text("Мой набор инструментов")
+                              .font(.subheadline)
+                              .foregroundColor(.gray)
+                          Spacer()
+                          Button {
+                              if let url = URL(string: "https://t.me/iosfreem") { openURL(url) }
+                          } label: {
+                              HStack(spacing: 10) {
+                                  Image(systemName: "paperplane.fill")
+                                  Text("Telegram @iosfreem").fontWeight(.semibold)
+                              }
+                              .foregroundColor(.black)
+                              .frame(maxWidth: .infinity)
+                              .padding(.vertical, 16)
+                              .background(LinearGradient(colors: [mint, green], startPoint: .leading, endPoint: .trailing))
+                              .clipShape(RoundedRectangle(cornerRadius: 18, style: .continuous))
+                              .shadow(color: green.opacity(0.45), radius: 16, y: 6)
+                          }
+                          .padding(.horizontal, 24)
+                          .padding(.bottom, 32)
+                      }
+                  }
+                  .preferredColorScheme(.dark)
+              }
+          }
+          EOF
+      - name: Generate Xcode project
+        run: |
+          brew install xcodegen
+          xcodegen generate
+      - name: Build
+        run: |
+          xcodebuild -project MintBox.xcodeproj -scheme MintBox \
+            -configuration Release -sdk iphoneos -derivedDataPath build \
+            CODE_SIGNING_ALLOWED=NO CODE_SIGNING_REQUIRED=NO CODE_SIGN_IDENTITY="" build
+      - name: Package IPA
+        run: |
+          mkdir Payload
+          cp -R build/Build/Products/Release-iphoneos/MintBox.app Payload/
+          zip -r MintBox.ipa Payload
+      - uses: actions/upload-artifact@v4
+        with:
+          name: MintBox-ipa
+          path: MintBox.ipa
